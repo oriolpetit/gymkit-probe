@@ -1,0 +1,54 @@
+name: Build GymKit Probe
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-ipa:
+    # GitHub-hosted macOS 26 (arm64) with Xcode 26.6 as default.
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+          xcrun -sdk iphoneos --show-sdk-path
+
+      - name: Install xtool
+        run: brew install xtool-org/tap/xtool
+
+      # Unsigned build: signing happens on the laptop with `xtool install`,
+      # which provisions and signs with the Apple ID logged in there.
+      - name: Build unsigned .ipa
+        run: xtool dev build --ipa
+
+      - name: Locate .ipa
+        id: ipa
+        run: |
+          IPA=$(find . -name '*.ipa' -not -path './.build/checkouts/*' | head -n 1)
+          if [ -z "$IPA" ]; then
+            echo "No .ipa produced" >&2
+            exit 1
+          fi
+          echo "Found $IPA"
+          echo "path=$IPA" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GymKitProbe-ipa
+          path: ${{ steps.ipa.outputs.path }}
+          if-no-files-found: error
+          retention-days: 14
