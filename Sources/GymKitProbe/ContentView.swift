@@ -1,4 +1,26 @@
 import SwiftUI
+import UIKit
+
+struct BridgeSection: View {
+    @ObservedObject var bridge: FTMSBridge
+
+    var body: some View {
+        GroupBox("FTMS bridge for other devices") {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    TextField("Name", text: $bridge.localName)
+                        .textFieldStyle(.roundedBorder)
+                        .disabled(bridge.enabled)
+                    Toggle("Broadcast", isOn: $bridge.enabled)
+                        .fixedSize()
+                }
+                Text("\(bridge.status) · subscribers \(bridge.subscriberCount) · sent \(bridge.forwardedPackets)")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
 
 struct ContentView: View {
     @StateObject private var probe = Probe()
@@ -20,6 +42,8 @@ struct ContentView: View {
 
                 bikeData
 
+                BridgeSection(bridge: probe.bridge)
+
                 if !probe.attached.isEmpty {
                     Text("Attached: " + probe.attached.joined(separator: ", "))
                         .font(.footnote)
@@ -30,6 +54,10 @@ struct ContentView: View {
             }
             .padding()
             .navigationTitle("GymKit Probe")
+            // Advertising and data forwarding degrade when the app is backgrounded,
+            // so keep the screen on while the probe is open.
+            .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
+            .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Clear") { probe.clearLog() }

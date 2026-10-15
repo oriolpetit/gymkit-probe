@@ -143,6 +143,35 @@ Also check that the Apple Fitness workout keeps receiving data while the probe i
 | `ADVERT 'LF-…'` then `Local connection OK` and `BIKE DATA` | A normal app can connect without GymKit's NFC data |
 | `ADVERT` then `Connect FAILED` / `Disconnected` with an error | Bike advertises, but refuses pairing without the NFC data |
 
+### Bridge: ride in MyWhoosh on another device
+
+Result of Test A (15 Oct 2026): it works, so the probe can re-broadcast the bike.
+
+The **FTMS bridge** section makes this iPhone advertise as a standard BLE indoor
+bike (default name `LF Bridge`) with:
+
+- **Fitness Machine Service 0x1826**: Indoor Bike Data (the bike's packets, with the
+  missing instantaneous-cadence flag set so receivers parse power correctly),
+  Fitness Machine Feature (the bike's value), Fitness Machine Status, Training Status,
+  and a Control Point that accepts Request Control / Reset / Start / Stop but
+  answers "not supported" to power, resistance and slope targets: the SE4 has no
+  control point, so ERG mode and simulated gradients cannot work.
+- **Cycling Power Service 0x1818**: power plus crank revolutions derived from cadence,
+  for apps that pair a power meter instead of a trainer.
+
+Steps:
+
+1. Tap the console, accept the Apple Fitness workout, start pedalling.
+2. Open GymKit Probe, switch on **Poll every 2 s** and wait for `BIKE DATA`.
+3. Switch on **Broadcast**. The status line should read `advertising as 'LF Bridge'`.
+4. On the other phone/tablet, in MyWhoosh pair `LF Bridge` as the smart trainer
+   (or as power source + cadence). The probe's status line shows the subscriber count.
+5. Keep GymKit Probe in the foreground on the bike phone (the screen stays on):
+   iOS limits advertising and Bluetooth work for apps in the background.
+
+After a new tap, polling finds the bike again and forwarding resumes; the bridge
+keeps advertising under the same name meanwhile.
+
 ### Optional: Bluetooth packet capture
 
 Reinstall the Bluetooth logging profile (it expired before 14 Oct), restart the

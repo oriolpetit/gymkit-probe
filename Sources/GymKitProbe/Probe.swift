@@ -9,12 +9,15 @@ final class Probe: NSObject, ObservableObject {
     static let appleGymKit = CBUUID(string: "FE13")
     static let indoorBikeData = CBUUID(string: "2AD2")
     static let fitnessMachineFeature = CBUUID(string: "2ACC")
-    static let subscribable: Set<CBUUID> = [indoorBikeData, CBUUID(string: "2ADA"), CBUUID(string: "2AD3")]
+    static let fitnessMachineStatus = CBUUID(string: "2ADA")
+    static let trainingStatus = CBUUID(string: "2AD3")
+    static let subscribable: Set<CBUUID> = [indoorBikeData, fitnessMachineStatus, trainingStatus]
     /// Each service is queried on its own so the log shows which UUID found the bike.
-    static let retrieveServices: [CBUUID] = [
-        ftms, appleGymKit,
-        CBUUID(string: "1818"), CBUUID(string: "1816"), CBUUID(string: "180D"), CBUUID(string: "180A"),
-    ]
+    /// Limited to the bike's services so watches and headphones are left alone.
+    static let retrieveServices: [CBUUID] = [ftms, appleGymKit]
+
+    /// Re-advertises the bike's data for apps on other devices (e.g. MyWhoosh).
+    let bridge = FTMSBridge()
 
     @Published var bluetoothState = "unknown"
     @Published var log: [String] = []
@@ -44,6 +47,7 @@ final class Probe: NSObject, ObservableObject {
     override init() {
         super.init()
         central = CBCentralManager(delegate: self, queue: .main)
+        bridge.log = { [weak self] line in self?.add(line) }
     }
 
     func add(_ line: String) {
@@ -237,13 +241,24 @@ extension Probe: CBPeripheralDelegate {
         }
         guard let value = characteristic.value else { return }
         let hex = value.map { String(format: "%02X", $0) }.joined()
-        if characteristic.uuid == Self.indoorBikeData {
+        switch characteristic.uuid {
+        case Self.indoorBikeData:
             bikeDataPackets += 1
             latest = IndoorBikeData.parse(value)
+            bridge.forwardIndoorBikeData(value, parsed: latest)
             if bikeDataPackets <= 3 || bikeDataPackets % 30 == 0 {
                 add("BIKE DATA #\(bikeDataPackets) \(hex) -> \(latest?.summary ?? "unparsed")")
             }
-        } else {
+        case Self.fitnessMachineFeature:
+            bridge.setFeature(value)
+            add("Value \(characteristic.uuid.uuidString): \(hex)")
+        case Self.fitnessMachineStatus:
+            bridge.forwardMachineStatus(value)
+            add("Value \(characteristic.uuid.uuidString): \(hex)")
+        case Self.trainingStatus:
+            bridge.forwardTrainingStatus(value)
+            add("Value \(characteristic.uuid.uuidString): \(hex)")
+        default:
             add("Value \(characteristic.uuid.uuidString): \(hex)")
         }
     }
